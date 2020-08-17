@@ -63,6 +63,15 @@ else()
     add_definitions(-Wall -Wextra)
 endif()
 
+if(ANDROID)
+    option(ENABLE_ANDROID_LOG "Build with LogCat output" ON)
+    if(ENABLE_ANDROID_LOG)
+        add_definitions(-DENABLE_ANDROID_LOG=1)
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -llog")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -llog")
+        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -llog")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -llog")
+    endif()
 
     # I don't know why andorid's clang++ compiler will report :
     #   "clang++: warning: argument unused during compilation: '-llog' '-s' [-Wunused-command-line-argument]"
@@ -84,8 +93,24 @@ endif()
 # force 1.73 boost compiling warning note
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS=1)
 
+# badvpn definitions for tun2socks
+if(NOT MSVC)
+    if(APPLE)
+        add_definitions(-DBADVPN_FREEBSD=1)
+    else()
+        add_definitions(-DBADVPN_LINUX=1)
+    endif()
+endif()
+
+add_definitions(-DBADVPN_THREADWORK_USE_PTHREAD=1 -DBADVPN_BREACTOR_BADVPN=1)
+add_definitions(-D_GNU_SOURCE=1 -DBADVPN_USE_SIGNALFD=1 -DBADVPN_USE_EPOLL=1)
+add_definitions(-DBADVPN_LITTLE_ENDIAN=1 -DBADVPN_THREAD_SAFE=1)
+
 include_directories(
     src
+    src/tun/lwip_custom
+    badvpn/lwip/src/include
+    badvpn
 )
 
 set(TROJAN_SOURCE_FILES 
@@ -116,42 +141,44 @@ set(TROJAN_SOURCE_FILES
     src/ssl/ssldefaults.cpp
     src/ssl/sslsession.cpp
 
+
 )
 
+if(ANDROID)
+    add_library(trojan SHARED ${TROJAN_SOURCE_FILES})
+
+    add_custom_command(TARGET trojan POST_BUILD
+        COMMAND "/bin/cp" -f libtrojan.so "${LIB_OUTPUT_DIR}/libtrojan.so"
+        COMMAND "${ANDROID_TOOLCHAIN_PREFIX}strip" -s "${LIB_OUTPUT_DIR}/libtrojan.so"
+        COMMENT "Strip debug symbols done on final binary.")
+else()
     add_executable(trojan ${TROJAN_SOURCE_FILES})
+endif()
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(trojan ${CMAKE_THREAD_LIBS_INIT})
 
 # https://github.com/microsoft/GSL supported
-#find_package(Microsoft.GSL CONFIG REQUIRED)
-if(${Microsoft.GSL_FOUND})
-  message(STATUS "Found the Guidelines Support Library: ${Microsoft.GSL_DIR}")
-  target_link_libraries(trojan INTERFACE Microsoft.GSL::GSL)
-else()
-  set(GSL_URL https://github.com/Microsoft/GSL)
-  set(GSL_VERSION 0f6dbc9)
-  message(STATUS "Using and shipping ${GSL_URL} version ${GCL_VERSION}")
-  set(GSL_DIR ${CMAKE_CURRENT_BINARY_DIR}/external/GSL)
-  if(NOT EXISTS ${GSL_DIR})
-    execute_process(COMMAND git clone ${GSL_URL} ${GSL_DIR})
-  endif()
-  execute_process(COMMAND git checkout ${GSL_VERSION} WORKING_DIRECTORY ${GSL_DIR})
-  #install(DIRECTORY ${GSL_DIR}/gsl DESTINATION include)
-  #install(FILES ${GSL_DIR}/LICENSE DESTINATION include/gsl/LICENSE)
-  set(GSL_INCLUDE_DIR NAMES ${GSL_DIR})
-  if(GSL_INCLUDE_DIR)
-    set(GSL_INCLUDE_DIRS ${GSL_INCLUDE_DIR}/include)
-    include_directories(${GSL_INCLUDE_DIRS})
-    set(GSL_FOUND TRUE)
-  endif()
-endif()
+include_directories(${PROJECT_SOURCE_DIR}/GSL/include)
 
 # for cland-tidy compiling database by default the file is small, generation is cheap
 # as developer, I am always add this option...
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if (ANDROID)
+    set(ANDROID_MY_LIBS ${PROJECT_SOURCE_DIR}/trojan-plus-android-libs) 
+    set(ANDROID_MY_LIBS_LIBRARIES 
+        ${ANDROID_MY_LIBS}/lib/${ANDROID_ABI}/libssl.a 
+        ${ANDROID_MY_LIBS}/lib/${ANDROID_ABI}/libcrypto.a
+        ${ANDROID_MY_LIBS}/lib/${ANDROID_ABI}/libboost_system.a
+        ${ANDROID_MY_LIBS}/lib/${ANDROID_ABI}/libboost_program_options.a)
+
+    set(OPENSSL_VERSION 1.1.1)
+
+    include_directories(${ANDROID_MY_LIBS}/include)
+    target_link_libraries(trojan ${ANDROID_MY_LIBS_LIBRARIES})
+else()
     find_package(Boost 1.72.0 REQUIRED COMPONENTS system program_options)
     include_directories(${Boost_INCLUDE_DIR})
     target_link_libraries(trojan ${Boost_LIBRARIES})
@@ -162,6 +189,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     find_package(OpenSSL 1.1.0 REQUIRED)
     include_directories(${OPENSSL_INCLUDE_DIR})
     target_link_libraries(trojan ${OPENSSL_LIBRARIES})
+endif()
 
 if(OPENSSL_VERSION VERSION_GREATER_EQUAL 1.1.1)
     option(ENABLE_SSL_KEYLOG "Build with SSL KeyLog support" ON)
@@ -180,7 +208,7 @@ if(FORCE_TCP_FASTOPEN)
     add_definitions(-DTCP_FASTOPEN=23 -DTCP_FASTOPEN_CONNECT=30)
 endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID)    
     option(ENABLE_MYSQL "Build with MySQL support" ON)
     if(ENABLE_MYSQL)
         find_package(MySQL REQUIRED)
