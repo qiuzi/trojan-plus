@@ -108,9 +108,7 @@ add_definitions(-DBADVPN_LITTLE_ENDIAN=1 -DBADVPN_THREAD_SAFE=1)
 
 include_directories(
     src
-    src/tun/lwip_custom
-    badvpn/lwip/src/include
-    badvpn
+
 )
 
 set(TROJAN_SOURCE_FILES 
