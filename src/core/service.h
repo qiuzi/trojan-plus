@@ -38,8 +38,6 @@
 #include "session/session.h"
 #include "session/udpforwardsession.h"
 
-class TUNDev;
-class DNSServer;
 class Pipeline;
 class icmpd;
 class Service {
