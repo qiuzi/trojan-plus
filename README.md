@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/qiuzi/trojan-plus.svg?branch=dev)](https://travis-ci.org/qiuzi/qiuzi/trojan-plus)
 # Trojan Plus Project
 ![](https://raw.githubusercontent.com/wiki/Trojan-Plus-Group/trojan-plus//trojan_plus_logo.png)
 
