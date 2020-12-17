@@ -19,6 +19,21 @@ stages:
     - publish: $(System.DefaultWorkingDirectory)/trojan
       artifact: LinuxBinary
 
+  - job: macOS
+    pool:
+      vmImage: macOS-latest
+    steps:
+    - checkout: self
+      submodules: true
+    - script: |
+        set -euo pipefail
+        brew install boost openssl@1.1
+        cmake -DBoost_USE_STATIC_LIBS=ON -DOPENSSL_INCLUDE_DIR=/usr/local/opt/openssl@1.1/include -DOPENSSL_CRYPTO_LIBRARY=/usr/local/opt/openssl@1.1/lib/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/local/opt/openssl@1.1/lib/libssl.a -DDEFAULT_CONFIG=config.json -DENABLE_MYSQL=OFF -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 .
+        make -j$(nproc)
+        strip -SXTx trojan
+    - publish: $(System.DefaultWorkingDirectory)/trojan
+      artifact: macOSBinary
+
 
 - stage: Package
   jobs:
@@ -43,3 +58,31 @@ stages:
         PIPELINE_WORKSPACE: $(Pipeline.Workspace)
     - publish: $(System.DefaultWorkingDirectory)/trojan-linux-amd64.tar.xz
       artifact: LinuxRelease
+
+  - job: macOS
+    pool:
+      vmImage: macOS-latest
+    steps:
+    - download: current
+      artifact: macOSBinary
+    - script: |
+        set -euo pipefail
+        BINARY="$PIPELINE_WORKSPACE/macOSBinary/trojan"
+        chmod +x "$BINARY"
+        mkdir trojan
+        cp "$BINARY" trojan/trojan
+        cp -r examples LICENSE README.md trojan
+        cp examples/client.json-example trojan/config.json
+        rm trojan/examples/nat.json-example trojan/examples/trojan.service-example
+        cat > trojan/start.command <<EOF
+        #!/bin/sh
+
+        cd "\$(dirname "\$0")"
+        ./trojan
+        EOF
+        chmod +x trojan/start.command
+        zip -r9 trojan-macos.zip trojan
+      env:
+        PIPELINE_WORKSPACE: $(Pipeline.Workspace)
+    - publish: $(System.DefaultWorkingDirectory)/trojan-macos.zip
+      artifact: macOSRelease
