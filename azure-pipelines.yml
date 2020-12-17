@@ -13,7 +13,7 @@ stages:
       submodules: true
     - script: |
         set -euo pipefail
-        cmake -DMYSQL_INCLUDE_DIR=/usr/local/include/mariadb -DMYSQL_LIBRARY=/usr/local/lib/mariadb/libmysqlclient.a -DDEFAULT_CONFIG=config.json -DFORCE_TCP_FASTOPEN=ON -DBoost_USE_STATIC_LIBS=ON .
+        cmake -DMYSQL_INCLUDE_DIR=/usr/local/include/mariadb -DMYSQL_LIBRARY=/usr/local/lib/mariadb/libmysqlclient.a -DDEFAULT_CONFIG=config.json -DENABLE_MYSQL=OFF -DENABLE_SSL_KEYLOG=OFF -DENABLE_REUSE_PORT=OFF -DENABLE_TLS13_CIPHERSUITES=ON -DFORCE_TCP_FASTOPEN=OFF -DSYSTEMD_SERVICE=OFF -DBoost_USE_STATIC_LIBS=ON .
         make -j$(nproc)
         strip -s trojan
     - publish: $(System.DefaultWorkingDirectory)/trojan
